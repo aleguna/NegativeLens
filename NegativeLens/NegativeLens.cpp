@@ -6,6 +6,9 @@
 
 #define MAX_LOADSTRING 100
 
+bool g_Invert = false;
+RECT g_CaptureRect = { 0 };
+
 // Global Variables:
 HINSTANCE hInst;                                // current instance
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
@@ -97,7 +100,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
    hInst = hInstance; // Store instance handle in our global variable
 
-   HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
+   HWND hWnd = CreateWindowExW(WS_EX_LAYERED, szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
       CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
 
    if (!hWnd)
@@ -105,10 +108,41 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
       return FALSE;
    }
 
+   SetLayeredWindowAttributes(hWnd, RGB (0, 255, 0), 255, LWA_ALPHA | LWA_COLORKEY);
+
+  
    ShowWindow(hWnd, nCmdShow);
    UpdateWindow(hWnd);
 
    return TRUE;
+}
+
+void DrawNegative(HWND hWnd, HDC hdc)
+{
+	RECT clRect = { 0 };
+	GetClientRect(hWnd, &clRect);
+	
+	if (g_Invert)
+	{
+		HDC hScreenDC = GetDC(NULL);
+
+		BitBlt(hdc,
+			clRect.left, clRect.top,
+			clRect.right - clRect.left,
+			clRect.bottom - clRect.top,
+			hScreenDC,
+			g_CaptureRect.left, g_CaptureRect.top,
+			NOTSRCCOPY
+		);
+
+		ReleaseDC(NULL, hScreenDC);
+	}
+	else
+	{
+		HBRUSH  hBrush = CreateSolidBrush(RGB(0, 255, 0));
+		FillRect(hdc, &clRect, hBrush);
+		DeleteObject(hBrush);
+	}
 }
 
 //
@@ -137,6 +171,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case IDM_EXIT:
                 DestroyWindow(hWnd);
                 break;
+			case ID_FILE_INVERT:
+					g_Invert = true;
+					GetClientRect(hWnd, &g_CaptureRect);
+					MapWindowPoints(hWnd, GetDesktopWindow(), (LPPOINT)&g_CaptureRect, 2);
+					break;
             default:
                 return DefWindowProc(hWnd, message, wParam, lParam);
             }
@@ -146,10 +185,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hWnd, &ps);
-            // TODO: Add any drawing code that uses hdc here...
+			DrawNegative(hWnd, hdc);
             EndPaint(hWnd, &ps);
         }
         break;
+	case WM_MOVE:
+		InvalidateRect(hWnd, NULL, TRUE);
+		UpdateWindow(hWnd);
+		break;
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
